@@ -5,11 +5,12 @@ events {
 http {
     # Upstream configuration for Blue/Green deployment
     upstream app_backend {
-        # Primary server (Blue active by default)
-        server app_blue:3000 max_fails=2 fail_timeout=5s;
+        # Primary server (active pool)
+        server app_${ACTIVE_POOL}:${PORT} max_fails=2 fail_timeout=5s;
         
-        # Backup server (Green for failover)
-        server app_green:3000 backup max_fails=2 fail_timeout=5s;
+        # Backup servers (both pools for failover)
+        server app_blue:${PORT} backup max_fails=2 fail_timeout=5s;
+        server app_green:${PORT} backup max_fails=2 fail_timeout=5s;
     }
 
     # Proxy settings for fast failover

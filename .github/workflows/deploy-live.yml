@@ -19,57 +19,10 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          # Cleanup old country currency app
-          pm2 delete country-api 2>/dev/null || true
-          pm2 save
-          sudo rm -rf /var/www/country-currency-api
-          sudo rm -f /etc/nginx/sites-enabled/country-api
-          sudo rm -f /etc/nginx/sites-available/country-api
-          
-          # Ensure Docker service is running
-          sudo systemctl start docker
-          sudo systemctl enable docker
-          
-          # Setup blue-green deployment directory
-          sudo mkdir -p /var/www/blue-green-deployment
-          sudo chown -R $USER:$USER /var/www/blue-green-deployment
-          
-          # Clone or update repository
-          cd /var/www
-          if [ -d "blue-green-deployment" ]; then
-            cd blue-green-deployment
-            git pull origin main || {
-              cd ..
-              sudo rm -rf blue-green-deployment
-              git clone https://github.com/tulbadex/blue-green-deployment.git
-              cd blue-green-deployment
-            }
-          else
-            git clone https://github.com/tulbadex/blue-green-deployment.git
-            cd blue-green-deployment
-          fi
-          
-          # Create environment file
-          cat > .env << 'EOF'
-          BLUE_IMAGE=yimikaade/wonderful:devops-stage-two
-          GREEN_IMAGE=yimikaade/wonderful:devops-stage-two
-          ACTIVE_POOL=blue
-          RELEASE_ID_BLUE=v1.0.0-blue
-          RELEASE_ID_GREEN=v1.0.0-green
-          PORT=3000
-          EOF
-          
-          # Pull images first
-          sudo docker pull yimikaade/wonderful:devops-stage-two
-          sudo docker pull nginx:alpine
-          
-          # Deploy with Docker Compose using sudo
-          sudo docker-compose down --remove-orphans || true
+          cd /var/www/blue-green-deployment
+          git pull origin main
+          sudo docker-compose down --remove-orphans
+          sudo docker-compose pull
           sudo docker-compose up -d
-          
-          # Configure firewall
-          sudo ufw allow 8080
-          
-          # Wait and test deployment
-          sleep 30
+          sleep 15
           curl -f http://localhost:8080/version
