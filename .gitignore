@@ -1,6 +1,9 @@
 # Environment files
 .env
 
+# Documentation (separate repo/wiki)
+docs/
+
 # Logs
 *.log
 
