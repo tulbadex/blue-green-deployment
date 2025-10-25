@@ -1,0 +1,84 @@
+name: Deploy Blue/Green to Live Server
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Live Server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Cleanup old country currency app
+          pm2 delete country-api 2>/dev/null || true
+          pm2 save
+          sudo rm -rf /var/www/country-currency-api
+          sudo rm -f /etc/nginx/sites-enabled/country-api
+          sudo rm -f /etc/nginx/sites-available/country-api
+          
+          # Install Docker if not present
+          if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sudo sh get-docker.sh
+            sudo usermod -aG docker $USER
+            rm get-docker.sh
+          fi
+          
+          # Install Docker Compose if not present
+          if ! command -v docker-compose &> /dev/null; then
+            sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+          fi
+          
+          # Ensure Docker service is running
+          sudo systemctl start docker
+          sudo systemctl enable docker
+          
+          # Setup blue-green deployment
+          sudo mkdir -p /var/www/blue-green-deployment
+          sudo chown -R $USER:$USER /var/www/blue-green-deployment
+          
+          # Add GitHub to known hosts
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          
+          cd /var/www
+          if [ -d "blue-green-deployment" ]; then
+            cd blue-green-deployment
+            git pull origin main
+          else
+            git clone git@github.com:tulbadex/blue-green-deployment.git
+            cd blue-green-deployment
+          fi
+          
+          # Create environment file
+          cat > .env << 'EOF'
+          BLUE_IMAGE=yimikaade/wonderful:devops-stage-two
+          GREEN_IMAGE=yimikaade/wonderful:devops-stage-two
+          ACTIVE_POOL=blue
+          RELEASE_ID_BLUE=v1.0.0-blue
+          RELEASE_ID_GREEN=v1.0.0-green
+          PORT=3000
+          EOF
+          
+          # Deploy with Docker Compose
+          docker-compose down --remove-orphans || true
+          docker-compose pull
+          docker-compose up -d
+          
+          # Configure firewall
+          sudo ufw allow 8080
+          
+          # Test deployment
+          sleep 15
+          curl -f http://localhost:8080/version || exit 1
