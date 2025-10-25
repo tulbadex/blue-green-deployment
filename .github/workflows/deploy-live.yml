@@ -26,38 +26,26 @@ jobs:
           sudo rm -f /etc/nginx/sites-enabled/country-api
           sudo rm -f /etc/nginx/sites-available/country-api
           
-          # Install Docker if not present
-          if ! command -v docker &> /dev/null; then
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sudo sh get-docker.sh
-            sudo usermod -aG docker $USER
-            rm get-docker.sh
-          fi
-          
-          # Install Docker Compose if not present
-          if ! command -v docker-compose &> /dev/null; then
-            sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-          fi
-          
           # Ensure Docker service is running
           sudo systemctl start docker
           sudo systemctl enable docker
           
-          # Setup blue-green deployment
+          # Setup blue-green deployment directory
           sudo mkdir -p /var/www/blue-green-deployment
           sudo chown -R $USER:$USER /var/www/blue-green-deployment
           
-          # Add GitHub to known hosts
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
-          
+          # Clone or update repository
           cd /var/www
           if [ -d "blue-green-deployment" ]; then
             cd blue-green-deployment
-            git pull origin main
+            git pull origin main || {
+              cd ..
+              sudo rm -rf blue-green-deployment
+              git clone https://github.com/tulbadex/blue-green-deployment.git
+              cd blue-green-deployment
+            }
           else
-            git clone git@github.com:tulbadex/blue-green-deployment.git
+            git clone https://github.com/tulbadex/blue-green-deployment.git
             cd blue-green-deployment
           fi
           
@@ -71,14 +59,17 @@ jobs:
           PORT=3000
           EOF
           
-          # Deploy with Docker Compose
-          docker-compose down --remove-orphans || true
-          docker-compose pull
-          docker-compose up -d
+          # Pull images first
+          sudo docker pull yimikaade/wonderful:devops-stage-two
+          sudo docker pull nginx:alpine
+          
+          # Deploy with Docker Compose using sudo
+          sudo docker-compose down --remove-orphans || true
+          sudo docker-compose up -d
           
           # Configure firewall
           sudo ufw allow 8080
           
-          # Test deployment
-          sleep 15
-          curl -f http://localhost:8080/version || exit 1
+          # Wait and test deployment
+          sleep 30
+          curl -f http://localhost:8080/version
