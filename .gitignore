@@ -4,6 +4,13 @@
 # Documentation (separate repo/wiki)
 docs/
 
+# Python virtual environment and conversion tools
+venv/
+convert_to_docx.py
+__pycache__/
+*.pyc
+*.pyo
+
 # Logs
 *.log
 
