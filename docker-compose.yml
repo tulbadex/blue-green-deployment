@@ -24,6 +24,8 @@ services:
       - APP_POOL=blue
       - RELEASE_ID=${RELEASE_ID_BLUE}
       - PORT=${PORT:-3000}
+      - CHAOS_MODE=${CHAOS_MODE:-false}
+      - CHAOS_ERROR_RATE=${CHAOS_ERROR_RATE:-0.5}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-3000}/healthz"]
@@ -40,6 +42,8 @@ services:
       - APP_POOL=green
       - RELEASE_ID=${RELEASE_ID_GREEN}
       - PORT=${PORT:-3000}
+      - CHAOS_MODE=${CHAOS_MODE:-false}
+      - CHAOS_ERROR_RATE=${CHAOS_ERROR_RATE:-0.5}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-3000}/healthz"]

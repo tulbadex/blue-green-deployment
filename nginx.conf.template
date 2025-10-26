@@ -6,20 +6,20 @@ http {
     # Upstream configuration for Blue/Green deployment
     upstream app_backend {
         # Primary server (active pool)
-        server app_${ACTIVE_POOL}:${PORT} max_fails=2 fail_timeout=5s;
+        server app_${ACTIVE_POOL}:${PORT} max_fails=1 fail_timeout=2s;
         
-        # Backup servers (both pools for failover)
-        server app_blue:${PORT} backup max_fails=2 fail_timeout=5s;
-        server app_green:${PORT} backup max_fails=2 fail_timeout=5s;
+        # Backup server (opposite pool for failover)
+        server app_blue:${PORT} backup max_fails=1 fail_timeout=2s;
+        server app_green:${PORT} backup max_fails=1 fail_timeout=2s;
     }
 
     # Proxy settings for fast failover
-    proxy_connect_timeout 2s;
-    proxy_send_timeout 2s;
-    proxy_read_timeout 2s;
-    proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
-    proxy_next_upstream_tries 2;
-    proxy_next_upstream_timeout 5s;
+    proxy_connect_timeout 1s;
+    proxy_send_timeout 1s;
+    proxy_read_timeout 1s;
+    proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;
+    proxy_next_upstream_tries 3;
+    proxy_next_upstream_timeout 3s;
 
     server {
         listen 80;
