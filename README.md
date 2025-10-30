@@ -64,6 +64,19 @@ Client → Nginx (8080) → Blue Service (8081) [Primary]
    curl -X POST http://localhost:8081/chaos/stop
    ```
 
+## Slack Setup
+
+### For HNG Workspace
+1. Ask admin to create incoming webhook for your channel
+2. Update `SLACK_WEBHOOK_URL` in `.env`
+3. Test with: `curl -X POST "$SLACK_WEBHOOK_URL" -d '{"text":"Test message"}'`
+
+### For Personal Testing
+1. Create Slack workspace at https://slack.com/create
+2. Go to https://api.slack.com/apps → "Create New App"
+3. Enable "Incoming Webhooks" and add to channel
+4. Copy webhook URL to `.env`
+
 ## Configuration
 
 Environment variables in `.env`:
