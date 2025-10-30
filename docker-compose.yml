@@ -5,6 +5,7 @@ services:
       - "8080:80"
     volumes:
       - ./nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
       - app_blue
       - app_green
@@ -12,8 +13,26 @@ services:
       - ACTIVE_POOL=${ACTIVE_POOL}
       - PORT=${PORT}
     command: >
-      sh -c "envsubst '$$ACTIVE_POOL $$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
+      sh -c "mkdir -p /var/log/nginx &&
+             rm -f /var/log/nginx/access.log /var/log/nginx/error.log &&
+             touch /var/log/nginx/access.log /var/log/nginx/error.log &&
+             envsubst '$$ACTIVE_POOL $$PORT' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
              nginx -g 'daemon off;'"
+    restart: unless-stopped
+
+  alert_watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.watcher
+    volumes:
+      - nginx_logs:/var/log/nginx:ro
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - ERROR_RATE_THRESHOLD=${ERROR_RATE_THRESHOLD:-2}
+      - WINDOW_SIZE=${WINDOW_SIZE:-200}
+      - ALERT_COOLDOWN_SEC=${ALERT_COOLDOWN_SEC:-300}
+    depends_on:
+      - nginx
     restart: unless-stopped
 
   app_blue:
@@ -51,3 +70,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+volumes:
+  nginx_logs:

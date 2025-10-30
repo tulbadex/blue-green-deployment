@@ -1,6 +1,6 @@
-# Blue/Green Deployment with Nginx Auto-Failover
+# Blue/Green Deployment with Observability & Slack Alerts
 
-Zero-downtime Blue/Green deployment using Docker Compose and Nginx with automatic failover.
+Zero-downtime Blue/Green deployment using Docker Compose and Nginx with automatic failover, enhanced with real-time monitoring and Slack notifications.
 
 ## Quick Start
 
@@ -24,6 +24,8 @@ Zero-downtime Blue/Green deployment using Docker Compose and Nginx with automati
 ```
 Client → Nginx (8080) → Blue Service (8081) [Primary]
                      → Green Service (8082) [Backup]
+                     ↓
+              Log Watcher → Slack Alerts
 ```
 
 ## Endpoints
@@ -74,6 +76,10 @@ Environment variables in `.env`:
 | `RELEASE_ID_BLUE` | Blue release ID | `v1.0.0-blue` |
 | `RELEASE_ID_GREEN` | Green release ID | `v1.0.0-green` |
 | `PORT` | Application port | `3000` |
+| `SLACK_WEBHOOK_URL` | Slack webhook for alerts | `https://hooks.slack.com/...` |
+| `ERROR_RATE_THRESHOLD` | Error rate alert threshold (%) | `2` |
+| `WINDOW_SIZE` | Request window for error calculation | `200` |
+| `ALERT_COOLDOWN_SEC` | Cooldown between duplicate alerts | `300` |
 
 ## Switching Active Pool
 
@@ -98,9 +104,65 @@ docker-compose logs -f
 curl http://localhost:8080/healthz
 ```
 
+## Observability Features
+
+### Structured Logging
+Nginx logs capture:
+- Pool serving request (`blue`/`green`)
+- Release ID of serving application
+- Upstream status and response time
+- Request timing and upstream address
+
+### Slack Alerts
+Automatic notifications for:
+- **Failover Events**: When traffic switches between pools
+- **High Error Rates**: When 5xx errors exceed threshold
+- **Rate Limiting**: Prevents alert spam with cooldown periods
+
+### Viewing Logs
+```bash
+# View structured nginx logs
+docker compose logs nginx
+
+# Monitor log watcher
+docker compose logs -f alert_watcher
+
+# Real-time log analysis
+docker compose exec nginx tail -f /var/log/nginx/access.log
+```
+
+## Testing Alerts
+
+### 1. Failover Alert Test
+```bash
+# Trigger chaos to force failover
+curl -X POST http://localhost:8081/chaos/start?mode=error
+
+# Make requests to trigger failover
+for i in {1..10}; do curl http://localhost:8080/version; done
+
+# Check Slack for failover alert
+```
+
+### 2. Error Rate Alert Test
+```bash
+# Enable high error rate
+curl -X POST http://localhost:8080/chaos/start?mode=error&rate=0.8
+
+# Generate requests to exceed threshold
+for i in {1..50}; do curl http://localhost:8080/version; done
+
+# Check Slack for error rate alert
+```
+
+## Runbook
+
+See [runbook.md](runbook.md) for detailed alert response procedures.
+
 ## Failover Characteristics
 
 - **Detection Time**: 1-2 seconds
 - **Failover Time**: <3 seconds  
 - **Success Rate**: ≥95% during failover
+- **Alert Delivery**: <10 seconds to Slack
 - **Zero Failed Requests**: Client always receives 200 response

@@ -11,6 +11,9 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Allow specific Python files for the project
+!watcher.py
+
 # Logs
 *.log
 
