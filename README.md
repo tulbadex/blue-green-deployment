@@ -146,26 +146,148 @@ docker compose exec nginx tail -f /var/log/nginx/access.log
 
 ## Testing Alerts
 
-### 1. Failover Alert Test
+### Quick Test (For Mentors/Evaluators)
+
+**Prerequisites:**
 ```bash
-# Trigger chaos to force failover
-curl -X POST http://localhost:8081/chaos/start?mode=error
+# Ensure short cooldown for testing
+sed -i 's/ALERT_COOLDOWN_SEC=300/ALERT_COOLDOWN_SEC=30/' .env
+docker-compose down && docker-compose up --build -d
+sleep 15
+```
+
+**Test Webhook:**
+```bash
+# Verify Slack webhook works
+curl -X POST "$SLACK_WEBHOOK_URL" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"🧪 Test - Blue/Green deployment ready for evaluation"}'
+```
+
+### 1. Failover Alert Test (Screenshot 1)
+
+**Method A: Container Stop (Guaranteed)**
+```bash
+# Stop blue container to force failover
+docker-compose stop app_blue
+
+# Make requests (all go to green)
+for i in {1..5}; do
+    echo "Request $i:"
+    curl http://localhost:8080/version
+    sleep 1
+done
+
+# Check Slack for Blue→Green failover alert
+```
+
+**Method B: Chaos Mode**
+```bash
+# Trigger chaos on blue
+curl -X POST "http://localhost:8081/chaos/start?mode=error&rate=1.0"
 
 # Make requests to trigger failover
-for i in {1..10}; do curl http://localhost:8080/version; done
+for i in {1..10}; do curl http://localhost:8080/version; sleep 1; done
 
 # Check Slack for failover alert
 ```
 
-### 2. Error Rate Alert Test
+### 2. Reverse Failover Test (Additional Alert)
 ```bash
-# Enable high error rate
-curl -X POST http://localhost:8080/chaos/start?mode=error&rate=0.8
+# Wait for cooldown
+sleep 35
 
-# Generate requests to exceed threshold
-for i in {1..50}; do curl http://localhost:8080/version; done
+# Restart blue, stop green
+docker-compose start app_blue
+sleep 5
+docker-compose stop app_green
 
-# Check Slack for error rate alert
+# Make requests (all go to blue)
+for i in {1..5}; do
+    echo "Request $i:"
+    curl http://localhost:8080/version
+    sleep 1
+done
+
+# Check Slack for Green→Blue failover alert
+```
+
+### 3. Error Rate Alert Test (Screenshot 2)
+```bash
+# Wait for cooldown
+sleep 35
+
+# Restart all services
+docker-compose start app_green
+sleep 5
+
+# Enable high error rate on both pools
+curl -X POST "http://localhost:8081/chaos/start?mode=error&rate=0.9"
+curl -X POST "http://localhost:8082/chaos/start?mode=error&rate=0.9"
+
+# Generate 60 requests to exceed 2% threshold
+echo "Generating high error rate..."
+for i in {1..60}; do
+    curl http://localhost:8080/version > /dev/null 2>&1
+    if [ $((i % 10)) -eq 0 ]; then
+        echo "Sent $i requests..."
+    fi
+done
+
+# Check Slack for High Error Rate alert
+```
+
+### 4. View Container Logs (Screenshot 3)
+```bash
+# View structured nginx logs
+echo "📋 Nginx Structured Logs:"
+docker-compose exec nginx tail -10 /var/log/nginx/access.log
+
+# View watcher activity
+echo "🔍 Watcher Activity:"
+docker-compose logs --tail=20 alert_watcher
+```
+
+### 5. Cleanup
+```bash
+# Stop all chaos modes
+curl -X POST "http://localhost:8081/chaos/stop"
+curl -X POST "http://localhost:8082/chaos/stop"
+
+# Reset cooldown for production
+sed -i 's/ALERT_COOLDOWN_SEC=30/ALERT_COOLDOWN_SEC=300/' .env
+
+echo "✅ Testing complete - check Slack for 3 alerts"
+```
+
+### Troubleshooting Tests
+
+**If no alerts received:**
+```bash
+# Check watcher is running
+docker-compose ps alert_watcher
+
+# Check watcher logs
+docker-compose logs alert_watcher
+
+# Check webhook URL
+echo $SLACK_WEBHOOK_URL
+
+# Test webhook directly
+curl -X POST "$SLACK_WEBHOOK_URL" -d '{"text":"Direct webhook test"}'
+```
+
+**If logs are empty:**
+```bash
+# Check nginx log file
+docker-compose exec nginx ls -la /var/log/nginx/
+docker-compose exec nginx cat /var/log/nginx/access.log
+
+# Make test request
+curl http://localhost:8080/version
+
+# Check logs again
+docker-compose exec nginx tail -1 /var/log/nginx/access.log
 ```
 
 ## Runbook
